@@ -74,13 +74,19 @@ void init_gba(GBA* gba, Cartridge* cart, byte* bios, bool bootbios) {
     }
 }
 
+#include "../gba_bios.h"
+
 byte* load_bios(char* filename) {
     FILE* fp = fopen(filename, "rb");
-    if (!fp) return NULL;
     byte* bios = malloc(BIOS_SIZE);
 
-    (void) !fread(bios, 1, BIOS_SIZE, fp);
-    fclose(fp);
+    if (fp) {
+        (void) !fread(bios, 1, BIOS_SIZE, fp);
+        fclose(fp);
+    } else {
+        printf("Using fallback hle BIOS\n");
+        memcpy(bios, gba_bios_bin, BIOS_SIZE);
+    }
     return bios;
 }
 

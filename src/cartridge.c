@@ -14,6 +14,104 @@ void eeprom_reverse_bytes(dword* eeprom, int size) {
     }
 }
 
+#include <js/glue.h>
+Cartridge* create_cartridge_from_picker(char** filename) {
+    Cartridge* cart = calloc(1, sizeof *cart);
+
+    JS_setFont("bold 20px Roboto");
+    JS_fillStyle("white");
+    const char *text[] = {
+        "Click to browse... (.gba)",
+    };
+
+    int count = sizeof(text) / sizeof(text[0]);
+    int y = 160 / count;
+    int y_step = 64;
+
+    for (int i = 0; i < count; i++) {
+        JS_fillText(text[i], (240 - JS_measureTextWidth(text[i])) / 2, (y + i * y_step) / 2);
+    }
+
+    int len;
+    uint8_t *file = JS_openFilePicker(&len, filename);
+
+    cart->rom_size = len;
+    cart->rom.b = malloc(cart->rom_size + 32);
+    memcpy(cart->rom.b, file, cart->rom_size);
+    free(file);
+
+    cart->sav_type = SAV_NONE;
+    cart->sav_size = 0;
+    cart->eeprom_mask = 0;
+
+    for (int i = 0; i < cart->rom_size >> 2; i++) {
+        if (!strncmp((void*) &cart->rom.w[i], "SRAM_V", 6)) {
+            cart->sav_type = SAV_SRAM;
+            cart->sav_size = SRAM_SIZE;
+            break;
+        }
+        if (!strncmp((void*) &cart->rom.w[i], "EEPROM_V", 8)) {
+            cart->sav_type = SAV_EEPROM;
+            cart->big_eeprom = true;
+            cart->sav_size = EEPROM_SIZE_L;
+            if (cart->rom_size > 0x1000000) {
+                cart->eeprom_mask = 0x1ffff00;
+            } else {
+                cart->eeprom_mask = 0x1000000;
+            }
+            cart->eeprom_size_set = false;
+            cart->eeprom_addr_len = 14;
+            break;
+        }
+        if (!strncmp((void*) &cart->rom.w[i], "FLASH_V", 7)) {
+            cart->sav_type = SAV_FLASH;
+            cart->big_flash = false;
+            cart->sav_size = FLASH_BK_SIZE;
+            cart->flash_code = 0xd4bf;
+            break;
+        }
+        if (!strncmp((void*) &cart->rom.w[i], "FLASH512_V", 10)) {
+            cart->sav_type = SAV_FLASH;
+            cart->big_flash = false;
+            cart->sav_size = FLASH_BK_SIZE;
+            cart->flash_code = 0xd4bf;
+            break;
+        }
+        if (!strncmp((void*) &cart->rom.w[i], "FLASH1M_V", 9)) {
+            cart->sav_type = SAV_FLASH;
+            cart->big_flash = true;
+            cart->sav_size = FLASH_BK_SIZE * 2;
+            cart->flash_code = 0x1362;
+            break;
+        }
+    }
+
+    cart->rom_filename = malloc(strlen(*filename) + 1);
+    strcpy(cart->rom_filename, *filename);
+    int i = strrchr(*filename, '.') - *filename;
+    cart->sav_filename = malloc(i + sizeof ".sav");
+    strncpy(cart->sav_filename, cart->rom_filename, i);
+    strcpy(cart->sav_filename + i, ".sav");
+    cart->sst_filename = malloc(i + sizeof ".sst");
+    strncpy(cart->sst_filename, cart->rom_filename, i);
+    strcpy(cart->sst_filename + i, ".sst");
+
+    // TODO add saves loading/downloading
+    if (cart->sav_size) {
+        cart->sram = malloc(cart->sav_size);
+        FILE* fp = fopen(cart->sav_filename, "rb");
+        if (fp) {
+            (void) !fread(cart->sram, 1, cart->sav_size, fp);
+            fclose(fp);
+            if (cart->sav_type == SAV_EEPROM) {
+                eeprom_reverse_bytes(cart->eeprom, cart->sav_size / 8);
+            }
+        } else memset(cart->sram, 0xff, cart->sav_size);
+    }
+
+    return cart;
+}
+
 Cartridge* create_cartridge(char* filename) {
     FILE* fp = fopen(filename, "rb");
     if (!fp) return NULL;

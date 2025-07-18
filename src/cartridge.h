@@ -69,6 +69,7 @@ typedef struct {
 } Cartridge;
 
 Cartridge* create_cartridge(char* filename);
+Cartridge* create_cartridge_from_picker(char** filename);
 void destroy_cartridge(Cartridge* cart);
 
 byte cart_read_sram(Cartridge* cart, hword addr);

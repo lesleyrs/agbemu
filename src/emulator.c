@@ -1,7 +1,10 @@
 #include "emulator.h"
 
-#include <SDL2/SDL.h>
-#include <zlib.h>
+// #include <SDL2/SDL.h>
+// #include <zlib.h>
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
 
 #include "arm_isa.h"
 #include "gba.h"
@@ -19,7 +22,9 @@ int emulator_init(int argc, char** argv) {
     read_args(argc, argv);
     if (!agbemu.romfile) {
         printf(usage);
+#ifndef __wasm
         return -1;
+#endif
     }
     if (!agbemu.biosfile) {
         agbemu.biosfile = "bios.bin";
@@ -28,9 +33,12 @@ int emulator_init(int argc, char** argv) {
     agbemu.gba = malloc(sizeof *agbemu.gba);
     agbemu.cart = create_cartridge(agbemu.romfile);
     if (!agbemu.cart) {
-        free(agbemu.gba);
-        printf("Invalid rom file\n");
-        return -1;
+        agbemu.cart = create_cartridge_from_picker(&agbemu.romfile);
+        if (!agbemu.cart) {
+            free(agbemu.gba);
+            printf("Invalid rom file\n");
+            return -1;
+        }
     }
 
     agbemu.bios = load_bios(agbemu.biosfile);
@@ -91,10 +99,10 @@ void read_args(int argc, char** argv) {
 void save_state() {
     gba_clear_ptrs(agbemu.gba);
 
-    gzFile fp = gzopen(agbemu.cart->sst_filename, "wb");
-    gzfwrite(agbemu.gba, sizeof *agbemu.gba, 1, fp);
-    gzfwrite(&agbemu.cart->st, sizeof agbemu.cart->st, 1, fp);
-    gzclose(fp);
+    // gzFile fp = gzopen(agbemu.cart->sst_filename, "wb");
+    // gzfwrite(agbemu.gba, sizeof *agbemu.gba, 1, fp);
+    // gzfwrite(&agbemu.cart->st, sizeof agbemu.cart->st, 1, fp);
+    // gzclose(fp);
 
     gba_set_ptrs(agbemu.gba, agbemu.cart, agbemu.bios);
 }
@@ -102,79 +110,81 @@ void save_state() {
 void load_state() {
     gba_clear_ptrs(agbemu.gba);
 
-    gzFile fp = gzopen(agbemu.cart->sst_filename, "rb");
-    gzfread(agbemu.gba, sizeof *agbemu.gba, 1, fp);
-    gzfread(&agbemu.cart->st, sizeof agbemu.cart->st, 1, fp);
-    gzclose(fp);
+    // gzFile fp = gzopen(agbemu.cart->sst_filename, "rb");
+    // gzfread(agbemu.gba, sizeof *agbemu.gba, 1, fp);
+    // gzfread(&agbemu.cart->st, sizeof agbemu.cart->st, 1, fp);
+    // gzclose(fp);
 
     gba_set_ptrs(agbemu.gba, agbemu.cart, agbemu.bios);
 }
 
-void hotkey_press(SDL_KeyCode key) {
+#include <js/dom_pk_codes.h>
+void hotkey_press(int key, int code) {
     switch (key) {
-        case SDLK_p:
+        case 'p':
             agbemu.pause = !agbemu.pause;
             break;
-        case SDLK_m:
+        case 'm':
             agbemu.mute = !agbemu.mute;
             break;
-        case SDLK_f:
+        case 'f':
             agbemu.filter = !agbemu.filter;
             break;
-        case SDLK_r:
+        case 'r':
             init_gba(agbemu.gba, agbemu.cart, agbemu.bios, agbemu.bootbios);
             agbemu.pause = false;
             break;
-        case SDLK_TAB:
-            agbemu.uncap = !agbemu.uncap;
-            break;
-        case SDLK_9:
+        case '9':
             save_state();
             break;
-        case SDLK_0:
+        case '0':
             load_state();
             break;
         default:
             break;
     }
+    switch (code) {
+        case DOM_PK_TAB:
+            agbemu.uncap = !agbemu.uncap;
+            break;
+    }
 }
 
-void update_input_keyboard(GBA* gba) {
-    const Uint8* keys = SDL_GetKeyboardState(NULL);
-    gba->io.keyinput.a = ~keys[SDL_SCANCODE_Z];
-    gba->io.keyinput.b = ~keys[SDL_SCANCODE_X];
-    gba->io.keyinput.start = ~keys[SDL_SCANCODE_RETURN];
-    gba->io.keyinput.select = ~keys[SDL_SCANCODE_RSHIFT];
-    gba->io.keyinput.left = ~keys[SDL_SCANCODE_LEFT];
-    gba->io.keyinput.right = ~keys[SDL_SCANCODE_RIGHT];
-    gba->io.keyinput.up = ~keys[SDL_SCANCODE_UP];
-    gba->io.keyinput.down = ~keys[SDL_SCANCODE_DOWN];
-    gba->io.keyinput.l = ~keys[SDL_SCANCODE_A];
-    gba->io.keyinput.r = ~keys[SDL_SCANCODE_S];
+void update_input_keyboard(GBA* gba, uint8_t *keys) {
+    gba->io.keyinput.a = ~keys[DOM_PK_Z];
+    gba->io.keyinput.b = ~keys[DOM_PK_X];
+    gba->io.keyinput.start = ~keys[DOM_PK_ENTER];
+    gba->io.keyinput.select = ~keys[DOM_PK_SHIFT_RIGHT];
+    gba->io.keyinput.left = ~keys[DOM_PK_ARROW_LEFT];
+    gba->io.keyinput.right = ~keys[DOM_PK_ARROW_RIGHT];
+    gba->io.keyinput.up = ~keys[DOM_PK_ARROW_UP];
+    gba->io.keyinput.down = ~keys[DOM_PK_ARROW_DOWN];
+    gba->io.keyinput.l = ~keys[DOM_PK_A];
+    gba->io.keyinput.r = ~keys[DOM_PK_S];
 }
 
-void update_input_controller(GBA* gba, SDL_GameController* controller) {
-    gba->io.keyinput.a &=
-        ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_A);
-    gba->io.keyinput.b &=
-        ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_X);
-    gba->io.keyinput.start &=
-        ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_START);
-    gba->io.keyinput.select &=
-        ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_BACK);
-    gba->io.keyinput.left &= ~SDL_GameControllerGetButton(
-        controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-    gba->io.keyinput.right &= ~SDL_GameControllerGetButton(
-        controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-    gba->io.keyinput.up &=
-        ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_DPAD_UP);
-    gba->io.keyinput.down &= ~SDL_GameControllerGetButton(
-        controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-    gba->io.keyinput.l &= ~SDL_GameControllerGetButton(
-        controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-    gba->io.keyinput.r &= ~SDL_GameControllerGetButton(
-        controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
-}
+// void update_input_controller(GBA* gba, SDL_GameController* controller) {
+//     gba->io.keyinput.a &=
+//         ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_A);
+//     gba->io.keyinput.b &=
+//         ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_X);
+//     gba->io.keyinput.start &=
+//         ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_START);
+//     gba->io.keyinput.select &=
+//         ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_BACK);
+//     gba->io.keyinput.left &= ~SDL_GameControllerGetButton(
+//         controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+//     gba->io.keyinput.right &= ~SDL_GameControllerGetButton(
+//         controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+//     gba->io.keyinput.up &=
+//         ~SDL_GameControllerGetButton(controller, SDL_CONTROLLER_BUTTON_DPAD_UP);
+//     gba->io.keyinput.down &= ~SDL_GameControllerGetButton(
+//         controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+//     gba->io.keyinput.l &= ~SDL_GameControllerGetButton(
+//         controller, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+//     gba->io.keyinput.r &= ~SDL_GameControllerGetButton(
+//         controller, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+// }
 
 byte color_lookup[32];
 byte color_lookup_filter[32];
@@ -187,7 +197,7 @@ void init_color_lookups() {
     }
 }
 
-void gba_convert_screen(hword* gba_screen, Uint32* screen) {
+void gba_convert_screen(hword* gba_screen, uint32_t* screen) {
     for (int i = 0; i < GBA_SCREEN_W * GBA_SCREEN_H; i++) {
         int r = gba_screen[i] & 0x1f;
         int g = (gba_screen[i] >> 5) & 0x1f;
