@@ -35,22 +35,18 @@ void __unordtf2() {}
 // }
 
 uint8_t keys[UINT16_MAX] = {0};
-static bool onkeydown(void *user_data, int key, int code, int modifiers) {
-    hotkey_press(key, code);
-    keys[code] = 1;
-    return 1;
-}
-
-static bool onkeyup(void *user_data, int key, int code, int modifiers) {
-    keys[code] = 0;
+static bool onkey(void *user_data, bool pressed, int key, int code, int modifiers) {
+    if (pressed) {
+        hotkey_press(key, code);
+    }
+    keys[code] = pressed;
     return 1;
 }
 
 int main(int argc, char** argv) {
 
     JS_createCanvas(240, 160);
-    JS_addKeyDownEventListener(NULL, onkeydown);
-    JS_addKeyUpEventListener(NULL, onkeyup);
+    JS_addKeyEventListener(NULL, onkey);
     if (emulator_init(argc, argv) < 0) return -1;
 
     // SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER);
