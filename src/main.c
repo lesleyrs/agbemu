@@ -40,6 +40,9 @@ static bool onkey(void *user_data, bool pressed, int key, int code, int modifier
         hotkey_press(key, code);
     }
     keys[code] = pressed;
+    if (code == DOM_PK_F12) {
+        return 0;
+    }
     return 1;
 }
 

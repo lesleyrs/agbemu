@@ -32,8 +32,8 @@ Cartridge* create_cartridge_from_picker(char** filename) {
         JS_fillText(text[i], (240 - JS_measureTextWidth(text[i])) / 2, (y + i * y_step) / 2);
     }
 
-    int len;
-    uint8_t *file = JS_openFilePicker(&len, filename);
+    size_t len;
+    uint8_t *file = JS_openFilePicker(filename, &len, ".gba");
 
     cart->rom_size = len;
     cart->rom.b = malloc(cart->rom_size + 32);
