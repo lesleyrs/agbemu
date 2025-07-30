@@ -1,8 +1,10 @@
 #include "cartridge.h"
+#include "ppu.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <js/glue.h>
 
 void eeprom_reverse_bytes(dword* eeprom, int size) {
     for (int i = 0; i < size; i++) {
@@ -14,26 +16,19 @@ void eeprom_reverse_bytes(dword* eeprom, int size) {
     }
 }
 
-#include <js/glue.h>
 Cartridge* create_cartridge_from_picker(char** filename) {
     Cartridge* cart = calloc(1, sizeof *cart);
 
     JS_setFont("bold 20px Roboto");
     JS_fillStyle("white");
-    const char *text[] = {
-        "Click to browse... (.gba)",
-    };
 
-    int count = sizeof(text) / sizeof(text[0]);
-    int y = 160 / count;
-    int y_step = 64;
-
-    for (int i = 0; i < count; i++) {
-        JS_fillText(text[i], (240 - JS_measureTextWidth(text[i])) / 2, (y + i * y_step) / 2);
-    }
+    const char ext[] = ".gba";
+    char buf[UINT8_MAX];
+    snprintf(buf, sizeof(buf), "Click to browse... (%s)", ext);
+    JS_fillText(buf, (GBA_SCREEN_W - JS_measureTextWidth(buf)) / 2, GBA_SCREEN_H / 2);
 
     size_t len;
-    uint8_t *file = JS_openFilePicker(filename, &len, ".gba");
+    uint8_t *file = JS_openFilePicker(filename, &len, ext);
 
     cart->rom_size = len;
     cart->rom.b = malloc(cart->rom_size + 32);
