@@ -48,7 +48,7 @@ static bool onkey(void *user_data, bool pressed, int key, int code, int modifier
 
 int main(int argc, char** argv) {
 
-    JS_createCanvas(GBA_SCREEN_W, GBA_SCREEN_H);
+    JS_createCanvas(GBA_SCREEN_W, GBA_SCREEN_H, "2d");
     JS_addKeyEventListener(NULL, onkey);
     if (emulator_init(argc, argv) < 0) return -1;
 
