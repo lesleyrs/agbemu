@@ -1,4 +1,3 @@
-// #include <SDL2/SDL.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +15,7 @@ char wintitle[200];
 uint32_t pixels[GBA_SCREEN_W*GBA_SCREEN_H];
 #ifdef __wasm
 #include <js/glue.h>
+#include <js/audio.h>
 #include <js/dom_pk_codes.h>
 void __unordtf2() {}
 #endif
@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
     //     .freq = SAMPLE_FREQ, .format = AUDIO_F32, .channels = 2, .samples = SAMPLE_BUF_LEN / 2};
     // SDL_AudioDeviceID audio = SDL_OpenAudioDevice(NULL, 0, &audio_spec, NULL, 0);
     // SDL_PauseAudioDevice(audio, 0);
+    JS_resumeAudio(SAMPLE_FREQ);
 
     uint64_t prev_time = JS_performanceNow();
     uint64_t prev_fps_update = prev_time;
@@ -89,20 +90,21 @@ int main(int argc, char** argv) {
         while (agbemu.running) {
             uint64_t cur_time;
             uint64_t elapsed;
-            // bool play_audio = !(agbemu.pause || agbemu.mute || agbemu.uncap || agbemu.gba->stop) &&
-            //                   (agbemu.gba->io.nr52 & (1 << 7));
+            bool play_audio = !(agbemu.pause || agbemu.mute || agbemu.uncap || agbemu.gba->stop) &&
+                              (agbemu.gba->io.nr52 & (1 << 7));
 
             if (!(agbemu.pause || agbemu.gba->stop)) {
                 do {
                     while (!agbemu.gba->stop && !agbemu.gba->ppu.frame_complete) {
                         gba_step(agbemu.gba);
-                        // if (agbemu.gba->apu.samples_full) {
-                        //     if (play_audio) {
-                        //         SDL_QueueAudio(audio, agbemu.gba->apu.sample_buf,
-                        //                        sizeof agbemu.gba->apu.sample_buf);
-                        //     }
-                        //     agbemu.gba->apu.samples_full = false;
-                        // }
+                        if (agbemu.gba->apu.samples_full) {
+                            if (play_audio) {
+                                JS_pushSamples(NULL, NULL, agbemu.gba->apu.sample_buf, sizeof agbemu.gba->apu.sample_buf);
+                                // SDL_QueueAudio(audio, agbemu.gba->apu.sample_buf,
+                                //                sizeof agbemu.gba->apu.sample_buf);
+                            }
+                            agbemu.gba->apu.samples_full = false;
+                        }
                     }
                     agbemu.gba->ppu.frame_complete = false;
                     frame++;
@@ -132,24 +134,23 @@ int main(int argc, char** argv) {
                 ((uint32_t*)pixels)[i] = pixel;
             }
             JS_setPixelsAlpha(pixels);
-            JS_requestAnimationFrame();
-            // TODO use setTimeout to be able to run at higher fps when browsers work
-            // JS_setTimeout(0);
+            // JS_requestAnimationFrame();
+            JS_setTimeout(0);
             #endif
 
             update_input_keyboard(agbemu.gba, keys);
             // if (controller) update_input_controller(agbemu.gba, controller);
             update_keypad_irq(agbemu.gba);
 
-            // cur_time = JS_performanceNow();
-            // elapsed = cur_time - prev_time;
-            // int64_t wait = frame_ticks - elapsed;
+            cur_time = JS_performanceNow();
+            elapsed = cur_time - prev_time;
+            int64_t wait = frame_ticks - elapsed;
 
-            // if (play_audio) {
-            //     while (SDL_GetQueuedAudioSize(audio) >= 16 * SAMPLE_BUF_LEN) SDL_Delay(1);
-            // } else if (wait > 0 && !agbemu.uncap) {
-                // SDL_Delay(wait);
-            // }
+            if (play_audio) {
+             while (JS_getQueuedAudioSize() >= 16 * SAMPLE_BUF_LEN) JS_setTimeout(1);
+            } else if (wait > 0 && !agbemu.uncap) {
+             JS_setTimeout(wait);
+            }
             cur_time = JS_performanceNow();
             elapsed = cur_time - prev_fps_update;
             if (elapsed >= 500) { // 1000 ms / 2
