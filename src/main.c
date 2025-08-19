@@ -99,9 +99,7 @@ int main(int argc, char** argv) {
                         gba_step(agbemu.gba);
                         if (agbemu.gba->apu.samples_full) {
                             if (play_audio) {
-                                JS_pushSamples(NULL, NULL, agbemu.gba->apu.sample_buf, sizeof agbemu.gba->apu.sample_buf);
-                                // SDL_QueueAudio(audio, agbemu.gba->apu.sample_buf,
-                                //                sizeof agbemu.gba->apu.sample_buf);
+                                JS_queueAudio(agbemu.gba->apu.sample_buf, sizeof agbemu.gba->apu.sample_buf);
                             }
                             agbemu.gba->apu.samples_full = false;
                         }
