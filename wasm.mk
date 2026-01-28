@@ -1,6 +1,6 @@
 TARGET_EXEC := agbemu.wasm
 
-CC := clang --target=wasm32 --sysroot=../../wasmlite/libc -nodefaultlibs -fno-builtin-pow
+CC := clang --target=wasm32 --sysroot=../../wasmlite/libc -nodefaultlibs
 
 CFLAGS := -std=c11 -Wall -Wimplicit-fallthrough -Wno-format #-Werror
 CFLAGS_RELEASE := -Oz -ffast-math -flto
